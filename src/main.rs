@@ -1,40 +1,19 @@
+use actor_rs::Actor;
 use tokio::sync::{mpsc, oneshot};
 
 #[tokio::main]
 async fn main() {
-    let (sender, receiver) = mpsc::channel(10);
-    let mut counter = Counter::new(0);
-    let counter_handle = CounterHandle { sender };
+    let counter = Counter::spawn(0);
 
-    tokio::spawn(async move {
-        counter.run(receiver).await;
-    });
+    counter.incr().await;
+    counter.incr().await;
+    counter.incr().await;
+    counter.decr().await;
 
-    counter_handle.incr().await;
-    counter_handle.incr().await;
-    let count = counter_handle.get().await;
-    println!("count: {}", count);
-}
-
-trait Actor {
-    type State;
-    type Msg;
-
-    fn new(state: Self::State) -> Self;
-    async fn run(&mut self, receiver: mpsc::Receiver<Self::Msg>);
-}
-
-trait ActorHandle {
-    type State;
-
-    async fn get(&self) -> Self::State;
+    println!("count: {}", counter.get().await);
 }
 
 struct Counter {
-    count: u32,
-}
-
-struct CounterHandle {
     sender: mpsc::Sender<CounterMsg>,
 }
 
@@ -48,46 +27,33 @@ impl Actor for Counter {
     type State = u32;
     type Msg = CounterMsg;
 
-    fn new(state: u32) -> Self {
-        Counter { count: state }
+    fn from_sender(sender: mpsc::Sender<CounterMsg>) -> Self {
+        Self { sender }
     }
 
-    async fn run(&mut self, mut receiver: mpsc::Receiver<CounterMsg>) {
-        while let Some(msg) = receiver.recv().await {
-            match msg {
-                CounterMsg::Get { reply_to } => {
-                    reply_to.send(self.count).unwrap();
-                }
-                CounterMsg::Incr => {
-                    self.count += 1;
-                }
-                CounterMsg::Decr => {
-                    self.count -= 1;
-                }
-            }
+    fn sender(&self) -> &mpsc::Sender<CounterMsg> {
+        &self.sender
+    }
+
+    fn get_fn(&self) -> fn(oneshot::Sender<u32>) -> CounterMsg {
+        |sender| CounterMsg::Get { reply_to: sender }
+    }
+
+    fn handle(state: &mut u32, msg: CounterMsg) {
+        match msg {
+            CounterMsg::Get { reply_to } => reply_to.send(*state).unwrap(),
+            CounterMsg::Incr => *state += 1,
+            CounterMsg::Decr => *state -= 1,
         }
     }
 }
 
-impl ActorHandle for CounterHandle {
-    type State = u32;
-
-    async fn get(&self) -> u32 {
-        let (sender, receiver) = oneshot::channel();
-        self.sender
-            .send(CounterMsg::Get { reply_to: sender })
-            .await
-            .unwrap();
-        receiver.await.unwrap()
-    }
-}
-
-impl CounterHandle {
+impl Counter {
     async fn incr(&self) {
-        self.sender.send(CounterMsg::Incr).await.unwrap();
+        self.send(CounterMsg::Incr).await;
     }
 
     async fn decr(&self) {
-        self.sender.send(CounterMsg::Decr).await.unwrap();
+        self.send(CounterMsg::Decr).await;
     }
 }
