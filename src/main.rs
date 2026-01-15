@@ -1,4 +1,5 @@
-use tokio::sync::{mpsc, oneshot};
+use actor_rs::{Actor, ActorHandle};
+use tokio::sync::oneshot;
 
 #[tokio::main]
 async fn main() {
@@ -13,6 +14,11 @@ async fn main() {
 }
 
 struct Counter;
+
+trait CounterActor {
+    async fn incr(&self, num: u32);
+    async fn decr(&self, num: u32);
+}
 
 enum CounterMsg {
     Get { reply_to: oneshot::Sender<u32> },
@@ -39,52 +45,12 @@ impl Actor for Counter {
     }
 }
 
-impl ActorHandle<Counter> {
-    pub async fn incr(&self, num: u32) {
+impl CounterActor for ActorHandle<Counter> {
+    async fn incr(&self, num: u32) {
         self.send(CounterMsg::Incr(num)).await;
     }
 
-    pub async fn decr(&self, num: u32) {
+    async fn decr(&self, num: u32) {
         self.send(CounterMsg::Decr(num)).await;
-    }
-}
-
-trait Actor: Sized + 'static {
-    type State: Send;
-    type Msg: Send;
-
-    fn handle(state: &mut Self::State, msg: Self::Msg);
-
-    fn spawn(init_state: Self::State, buffer: usize) -> ActorHandle<Self> {
-        let (sender, mut receiver) = mpsc::channel(buffer);
-
-        tokio::spawn(async move {
-            let mut state = init_state;
-
-            while let Some(msg) = receiver.recv().await {
-                Self::handle(&mut state, msg)
-            }
-        });
-
-        ActorHandle { sender }
-    }
-}
-
-struct ActorHandle<A: Actor> {
-    sender: mpsc::Sender<A::Msg>,
-}
-
-impl<A: Actor> ActorHandle<A> {
-    async fn send(&self, msg: A::Msg) {
-        self.sender.send(msg).await.unwrap()
-    }
-
-    async fn get(&self) -> A::State
-    where
-        A::Msg: From<oneshot::Sender<A::State>>,
-    {
-        let (sender, receiver) = oneshot::channel();
-        self.send(A::Msg::from(sender)).await;
-        receiver.await.unwrap()
     }
 }
