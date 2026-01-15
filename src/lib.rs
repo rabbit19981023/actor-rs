@@ -30,12 +30,13 @@ impl<A: Actor> ActorHandle<A> {
         self.sender.send(msg).await.unwrap()
     }
 
-    pub async fn get(&self) -> A::State
+    pub async fn ask<F>(&self, into_msg: F) -> A::State
     where
-        A::Msg: From<oneshot::Sender<A::State>>,
+        F: FnOnce(oneshot::Sender<A::State>) -> A::Msg,
     {
         let (sender, receiver) = oneshot::channel();
-        self.send(A::Msg::from(sender)).await;
+        let msg = into_msg(sender);
+        self.send(msg).await;
         receiver.await.unwrap()
     }
 }

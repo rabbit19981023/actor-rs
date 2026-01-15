@@ -16,6 +16,7 @@ async fn main() {
 struct Counter;
 
 trait CounterActor {
+    async fn get(&self) -> u32;
     async fn incr(&self, num: u32);
     async fn decr(&self, num: u32);
 }
@@ -24,12 +25,6 @@ enum CounterMsg {
     Get { reply_to: oneshot::Sender<u32> },
     Incr(u32),
     Decr(u32),
-}
-
-impl From<oneshot::Sender<u32>> for CounterMsg {
-    fn from(sender: oneshot::Sender<u32>) -> Self {
-        CounterMsg::Get { reply_to: sender }
-    }
 }
 
 impl Actor for Counter {
@@ -46,6 +41,10 @@ impl Actor for Counter {
 }
 
 impl CounterActor for ActorHandle<Counter> {
+    async fn get(&self) -> u32 {
+        self.ask(|reply_to| CounterMsg::Get { reply_to }).await
+    }
+
     async fn incr(&self, num: u32) {
         self.send(CounterMsg::Incr(num)).await;
     }
