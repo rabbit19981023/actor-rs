@@ -15,7 +15,7 @@ async fn main() {
 
 struct Counter;
 
-trait CounterActor {
+trait CounterApi {
     async fn get(&self) -> u32;
     async fn incr(&self, num: u32);
     async fn decr(&self, num: u32);
@@ -40,7 +40,7 @@ impl Actor for Counter {
     }
 }
 
-impl CounterActor for ActorHandle<Counter> {
+impl CounterApi for ActorHandle<Counter> {
     async fn get(&self) -> u32 {
         self.ask(|reply_to| CounterMsg::Get { reply_to }).await
     }
