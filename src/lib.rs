@@ -1,10 +1,15 @@
 use tokio::sync::{mpsc, oneshot};
 
+pub enum ActorSignal {
+    Continue,
+    Stop,
+}
+
 pub trait Actor: Sized + 'static {
     type State: Send;
     type Msg: Send;
 
-    fn handle(state: &mut Self::State, msg: Self::Msg) -> bool;
+    fn handle(state: &mut Self::State, msg: Self::Msg) -> ActorSignal;
 
     fn spawn(init_state: Self::State, buffer: usize) -> ActorHandle<Self> {
         let (sender, mut receiver) = mpsc::channel(buffer);
@@ -13,7 +18,7 @@ pub trait Actor: Sized + 'static {
             let mut state = init_state;
 
             while let Some(msg) = receiver.recv().await {
-                if !Self::handle(&mut state, msg) {
+                if let ActorSignal::Stop = Self::handle(&mut state, msg) {
                     break;
                 }
             }

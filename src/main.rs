@@ -1,4 +1,4 @@
-use actor_rs::{Actor, ActorHandle};
+use actor_rs::{Actor, ActorHandle, ActorSignal};
 use tokio::sync::oneshot;
 
 #[tokio::main]
@@ -35,9 +35,9 @@ impl Actor for Counter {
     type State = u32;
     type Msg = CounterMsg;
 
-    fn handle(state: &mut u32, msg: CounterMsg) -> bool {
+    fn handle(state: &mut u32, msg: CounterMsg) -> ActorSignal {
         if let CounterMsg::Stop = msg {
-            return false;
+            return ActorSignal::Stop;
         }
 
         match msg {
@@ -47,7 +47,7 @@ impl Actor for Counter {
             CounterMsg::Stop => unreachable!(),
         }
 
-        true
+        ActorSignal::Continue
     }
 }
 
