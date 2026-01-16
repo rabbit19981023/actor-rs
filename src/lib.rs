@@ -4,7 +4,7 @@ pub trait Actor: Sized + 'static {
     type State: Send;
     type Msg: Send;
 
-    fn handle(state: &mut Self::State, msg: Self::Msg);
+    fn handle(state: &mut Self::State, msg: Self::Msg) -> bool;
 
     fn spawn(init_state: Self::State, buffer: usize) -> ActorHandle<Self> {
         let (sender, mut receiver) = mpsc::channel(buffer);
@@ -13,7 +13,9 @@ pub trait Actor: Sized + 'static {
             let mut state = init_state;
 
             while let Some(msg) = receiver.recv().await {
-                Self::handle(&mut state, msg)
+                if !Self::handle(&mut state, msg) {
+                    break;
+                }
             }
         });
 
